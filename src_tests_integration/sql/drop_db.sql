@@ -1,0 +1,1 @@
+DROP DATABASE IF EXISTS migratrom_it WITH (FORCE);

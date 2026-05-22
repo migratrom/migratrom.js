@@ -1,0 +1,67 @@
+{
+	"name": "migratrom",
+	"version": "0.0.2",
+	"description": "PostgreSQL schema migrations for Bun, Node, and Deno",
+	"keywords": [
+		"bun",
+		"ddl",
+		"migrations",
+		"postgresql",
+		"schema"
+	],
+	"homepage": "https://github.com/mofax/migratrom#readme",
+	"bugs": {
+		"url": "https://github.com/mofax/migratrom/issues"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mofax/migratrom.git"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./adapters/postgres": {
+			"types": "./dist/adapters/postgres.d.ts",
+			"import": "./dist/adapters/postgres.js"
+		}
+	},
+	"scripts": {
+		"build": "vp pack",
+		"prepack": "vp pack",
+		"prepublishOnly": "vp pack",
+		"test:unit": "bun test src_tests/",
+		"test:integration": "bun src_tests_integration/harness.ts",
+		"fmt": "oxfmt",
+		"lint": "oxlint"
+	},
+	"dependencies": {
+		"cbor-x": "^1.6.4"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"postgres": "^3.4.5",
+		"vite-plus": "latest"
+	},
+	"peerDependencies": {
+		"postgres": "^3.4.0"
+	},
+	"peerDependenciesMeta": {
+		"postgres": {
+			"optional": true
+		}
+	},
+	"engines": {
+		"node": ">=18"
+	}
+}
