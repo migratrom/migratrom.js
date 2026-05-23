@@ -2,7 +2,7 @@ import { ConfigError, MigrationChecksumMismatchError, MigrationFailedError } fro
 import { planOrder } from "../graph/dag.ts";
 import type { ApplyOptions, ApplyResult, Db, Logger, Migration, Operation } from "../types.ts";
 import { bytesEqual, bytesToHex, hexToBytes } from "../utilities/encoding/bytes.ts";
-import { decodeHashPacket, encodeHashPacket } from "../utilities/hashes/packet.ts";
+import { decodeHashPacket } from "../utilities/hashes/packet.ts";
 import { sha256 } from "../utilities/hashes/sha.ts";
 import { stableStringify } from "../utilities/stableJson.ts";
 import { runOperation } from "./executor.ts";
@@ -15,6 +15,29 @@ import {
 } from "./history.ts";
 import { consoleLogger } from "./logger.ts";
 
+/**
+ * Apply pending migrations in dependency order and record them in the history table.
+ *
+ * Already-applied migrations are skipped, but their operation payloads are
+ * checksum-verified — a changed payload for an applied id throws a checksum
+ * mismatch error. Each pending migration runs inside a single transaction unless
+ * it contains operations marked
+ * {@link Operation.outsideTransaction | outsideTransaction} (e.g.
+ * `CREATE INDEX CONCURRENTLY`).
+ *
+ * Individual operations are idempotent: when a postcheck already passes, the
+ * operation is skipped and its id appears in {@link ApplyResult.skippedOps}.
+ *
+ * @param migrations - Ordered migration graph; use {@link Migration.parentId} to declare dependencies.
+ * @param options - Database handle, optional dry-run, logger, and history table name.
+ * @returns ids of migrations applied in this run and operation ids skipped as already satisfied.
+ *
+ * @example
+ * ```ts
+ * await applyMigrations([M1, M2], { db: postgresAdapter(sql) });
+ * await applyMigrations(migrations, { db, dryRun: true }); // plan + prechecks only
+ * ```
+ */
 export async function applyMigrations(
 	migrations: Migration[],
 	options: ApplyOptions,

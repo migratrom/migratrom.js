@@ -3,6 +3,17 @@ import { alterTable, constraintExistsSql } from "../sql/catalog.ts";
 import { quoteIdent, quoteIdentList } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Add a named `PRIMARY KEY` constraint on existing columns.
+ *
+ * Use {@link createTable} when defining the primary key at table creation time.
+ *
+ * @param schema - PostgreSQL schema, e.g. `"public"`.
+ * @param table - Table to alter.
+ * @param constraintName - Stable constraint name stored in the catalog.
+ * @param columns - Primary-key column(s), in key order.
+ * @returns An idempotent operation that skips when the constraint already exists.
+ */
 export function addPrimaryKey(
 	schema: string,
 	table: string,

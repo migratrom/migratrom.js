@@ -3,6 +3,12 @@ import { schemaExistsSql } from "../sql/catalog.ts";
 import { quoteIdent } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Create a PostgreSQL schema.
+ *
+ * @param name - Schema name; quoted as a SQL identifier.
+ * @returns An idempotent operation that skips when the schema already exists.
+ */
 export function createSchema(name: string): Operation {
 	const createSql = `CREATE SCHEMA ${quoteIdent(name)}`;
 

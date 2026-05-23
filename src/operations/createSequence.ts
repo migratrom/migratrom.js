@@ -3,6 +3,13 @@ import { regclassExistsSql } from "../sql/catalog.ts";
 import { qualified } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Create a standalone sequence in the given schema.
+ *
+ * @param schema - PostgreSQL schema, e.g. `"public"`.
+ * @param name - Unqualified sequence name.
+ * @returns An idempotent operation that skips when the sequence already exists.
+ */
 export function createSequence(schema: string, name: string): Operation {
 	const createSql = `CREATE SEQUENCE ${qualified(schema, name)}`;
 

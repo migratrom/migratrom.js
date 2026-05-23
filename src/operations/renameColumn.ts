@@ -3,6 +3,15 @@ import { alterTable, columnExistsSql } from "../sql/catalog.ts";
 import { quoteIdent } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Rename a column within a table.
+ *
+ * @param schema - PostgreSQL schema, e.g. `"public"`.
+ * @param table - Table containing the column.
+ * @param from - Current column name.
+ * @param to - New column name; must not already exist on the table.
+ * @returns An idempotent operation that skips when the target name is already present.
+ */
 export function renameColumn(schema: string, table: string, from: string, to: string): Operation {
 	const qTable = alterTable(schema, table);
 	const alterSql = `ALTER TABLE ${qTable} RENAME COLUMN ${quoteIdent(from)} TO ${quoteIdent(to)}`;

@@ -3,6 +3,14 @@ import { viewExistsSql } from "../sql/catalog.ts";
 import { qualified } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Create a regular (non-materialized) view from a `SELECT` statement.
+ *
+ * @param schema - PostgreSQL schema, e.g. `"public"`.
+ * @param name - Unqualified view name.
+ * @param selectSql - Query body after `AS`; must not include a trailing semicolon.
+ * @returns An idempotent operation that skips when the view already exists.
+ */
 export function createView(schema: string, name: string, selectSql: string): Operation {
 	const createSql = `CREATE VIEW ${qualified(schema, name)} AS ${selectSql}`;
 

@@ -3,6 +3,17 @@ import { alterTable, columnExistsSql, columnNotNullSql } from "../sql/catalog.ts
 import { quoteIdent } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Promote a nullable column to `NOT NULL`.
+ *
+ * The column must exist and currently allow nulls. Ensure existing rows satisfy
+ * the constraint before applying this migration.
+ *
+ * @param schema - PostgreSQL schema, e.g. `"public"`.
+ * @param table - Table containing the column.
+ * @param column - Column to alter.
+ * @returns An idempotent operation that skips when the column is already `NOT NULL`.
+ */
 export function setColumnNotNull(schema: string, table: string, column: string): Operation {
 	const qTable = alterTable(schema, table);
 	const alterSql = `ALTER TABLE ${qTable} ALTER COLUMN ${quoteIdent(column)} SET NOT NULL`;

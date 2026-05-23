@@ -28,6 +28,15 @@ function parseScalarFromRows<T>(rows: unknown[], sql: string): T | undefined {
 	}
 }
 
+/**
+ * Wrap a `postgres` client as a {@link Db} for use with {@link applyMigrations}.
+ *
+ * Reuses the active transaction when {@link Db.withTransaction} is nested, so
+ * migration runners and operation executors share one connection scope.
+ *
+ * @param sql - Connected `postgres` instance (from the `postgres` package).
+ * @returns A driver adapter implementing the migratrom {@link Db} contract.
+ */
 export function postgresAdapter(sql: postgres.Sql): Db {
 	const txCtx = createTxContext<SqlExec>();
 	const resolve = (): SqlExec => txCtx.getActive() ?? sql;

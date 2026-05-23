@@ -3,6 +3,15 @@ import { constraintExistsSql } from "../sql/catalog.ts";
 import { qualified, quoteIdent, quoteIdentList } from "../sql/identifiers.ts";
 import { check, step } from "./helpers.ts";
 
+/**
+ * Add a named `UNIQUE` constraint on one or more columns.
+ *
+ * @param schema - PostgreSQL schema, e.g. `"public"`.
+ * @param table - Table to alter.
+ * @param constraintName - Stable constraint name stored in the catalog.
+ * @param columns - Column(s) that must be unique together.
+ * @returns An idempotent operation that skips when the constraint already exists.
+ */
 export function addUnique(
 	schema: string,
 	table: string,

@@ -1,11 +1,17 @@
 import type { Check, ExecuteStep, Operation } from "../types.ts";
 import { ConfigError } from "../errors.ts";
 
+/** Input for {@link rawSql}. */
 export interface RawSqlInput {
+	/** Human-readable label used in logs and as the default operation id slug. */
 	label: string;
+	/** Optional boolean probes run before execute; descriptions default to the SQL text. */
 	precheck?: Array<Partial<Check> & { sql: string }>;
+	/** One or more side-effecting statements; at least one is required. */
 	execute: Array<Partial<ExecuteStep> & { sql: string }>;
+	/** Boolean probes that must pass after execute; at least one is required. */
 	postcheck?: Array<Partial<Check> & { sql: string }>;
+	/** Stable operation id; defaults to a slug derived from {@link RawSqlInput.label}. */
 	id?: string;
 }
 
@@ -31,6 +37,27 @@ function normalizeSteps(steps: Array<Partial<ExecuteStep> & { sql: string }>): E
 	}));
 }
 
+/**
+ * Escape hatch for DDL (or DML) not covered by a first-class operation builder.
+ *
+ * Uses the same precheck → execute → postcheck pipeline as built-in operations.
+ * When every postcheck already passes, the operation is skipped. At least one
+ * execute step and one postcheck are required.
+ *
+ * @param input - Label, SQL steps, and optional stable id.
+ * @returns A fully specified {@link Operation} ready for a {@link Migration}.
+ *
+ * @example
+ * ```ts
+ * rawSql({
+ *   label: "create sequence raw_seq",
+ *   execute: [{ sql: 'CREATE SEQUENCE public.raw_seq' }],
+ *   postcheck: [
+ *     { sql: `SELECT to_regclass('"public"."raw_seq"') IS NOT NULL` },
+ *   ],
+ * })
+ * ```
+ */
 export function rawSql(input: RawSqlInput): Operation {
 	const execute = normalizeSteps(input.execute);
 	if (execute.length === 0) {
