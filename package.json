@@ -1,6 +1,6 @@
 {
 	"name": "migratrom",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"description": "PostgreSQL schema migrations for Bun, Node, and Deno",
 	"keywords": [
 		"bun",
