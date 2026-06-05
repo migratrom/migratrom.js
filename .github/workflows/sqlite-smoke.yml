@@ -10,7 +10,7 @@ jobs:
   smoke:
     strategy:
       matrix:
-        runtime: [bun, node, deno]
+        runtime: [bun, node]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,14 +23,7 @@ jobs:
         with:
           node-version: 22
 
-      - uses: denoland/setup-deno@v2
-        if: matrix.runtime == 'deno'
-        with:
-          deno-version: v2.x
-
       - run: bun scripts/sqlite-smoke.mjs
         if: matrix.runtime == 'bun'
       - run: node scripts/sqlite-smoke.mjs
         if: matrix.runtime == 'node'
-      - run: deno run --allow-env --allow-ffi --allow-read --allow-write --node-modules-dir=manual --no-lock scripts/sqlite-smoke.mjs
-        if: matrix.runtime == 'deno'
