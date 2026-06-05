@@ -60,15 +60,73 @@ export interface Migration {
 	readonly operations: Operation[];
 }
 
+export interface DialectCapabilities {
+	enumTypes: boolean;
+	sequences: boolean;
+	materializedViews: boolean;
+	extensions: boolean;
+	concurrentIndexes: boolean;
+	schemas: boolean;
+	advisoryLocks: boolean;
+	addCheckConstraints: boolean;
+	addPrimaryKeyConstraints: boolean;
+	addUniqueConstraints: boolean;
+	addForeignKeys: boolean;
+	alterColumnDefault: boolean;
+	alterColumnNotNull: boolean;
+}
+
+export interface SQLDialect {
+	readonly name: string;
+	readonly capabilities: DialectCapabilities;
+
+	quoteIdent(name: string): string;
+	quoteLiteral(value: string): string;
+	qualified(schema: string, name: string): string;
+	quoteIdentList(names: string[]): string;
+
+	renderColumnDef(column: ColumnDef): string;
+	renderColumnList(columns: ColumnDef[]): string;
+	createIndexSql(
+		schema: string,
+		table: string,
+		indexName: string,
+		columns: string[],
+		concurrently: boolean,
+	): string;
+
+	tableExistsSql(schema: string, table: string, negate: boolean): string;
+	columnExistsSql(schema: string, table: string, column: string, negate: boolean): string;
+	constraintExistsSql(schema: string, table: string, name: string, negate: boolean): string;
+	primaryKeyExistsSql(schema: string, table: string, negate: boolean): string;
+	checkConstraintExistsSql(schema: string, table: string, name: string, negate: boolean): string;
+	schemaExistsSql(schema: string, negate: boolean): string;
+	extensionExistsSql(name: string, negate: boolean): string;
+	enumTypeExistsSql(schema: string, name: string, negate: boolean): string;
+	enumLabelExistsSql(schema: string, typeName: string, value: string, negate: boolean): string;
+	viewExistsSql(schema: string, name: string, negate: boolean): string;
+	matviewExistsSql(schema: string, name: string, negate: boolean): string;
+	columnDefaultSetSql(schema: string, table: string, column: string, negate: boolean): string;
+	columnNotNullSql(schema: string, table: string, column: string, negate: boolean): string;
+
+	createHistoryTableSql(name: string): string;
+	acquireLock(db: Db, key: bigint): Promise<void>;
+	releaseLock(db: Db, key: bigint): Promise<void>;
+}
+
 export interface ApplyOptions {
 	/** Driver-agnostic DB handle. Build via an adapter, e.g. postgresAdapter(sql). */
 	db: Db;
+	/** SQL generation and database capabilities. Must match the database adapter. */
+	dialect: SQLDialect;
 	/** Override history table name. Default "__migratron_history__". */
 	historyTable?: string;
 	/** Build & log the plan, run prechecks read-only, but execute nothing. */
 	dryRun?: boolean;
 	/** Optional structured logger; defaults to a console-based one. */
 	logger?: Logger;
+	/** Serialize applies when supported by the dialect. Defaults to true. */
+	advisoryLock?: boolean;
 }
 
 /**
@@ -85,6 +143,8 @@ export interface Db {
 	/** Run a query returning all rows as objects. */
 	queryRows<T extends Record<string, unknown>>(sql: string): Promise<T[]>;
 	withTransaction<T>(fn: () => Promise<T>): Promise<T>;
+	/** Pin work to one underlying connection when the driver is pooled. */
+	withConnection?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 export interface Logger {

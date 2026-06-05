@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { alterTable, checkConstraintExistsSql } from "../sql/catalog.ts";
-import { quoteIdent } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Add a named `CHECK` constraint to a table.
@@ -17,9 +15,11 @@ export function addCheck(
 	table: string,
 	constraintName: string,
 	checkSql: string,
+	dialect: SQLDialect,
 ): Operation {
-	const qTable = alterTable(schema, table);
-	const alterSql = `ALTER TABLE ${qTable} ADD CONSTRAINT ${quoteIdent(constraintName)} CHECK (${checkSql})`;
+	requireCapability(dialect, "addCheckConstraints", "ADD CHECK constraints");
+	const qTable = dialect.qualified(schema, table);
+	const alterSql = `ALTER TABLE ${qTable} ADD CONSTRAINT ${dialect.quoteIdent(constraintName)} CHECK (${checkSql})`;
 
 	return {
 		id: `check.${table}.${constraintName}`,
@@ -27,14 +27,14 @@ export function addCheck(
 		precheck: [
 			check(
 				`ensure check constraint "${constraintName}" does not exist on "${table}"`,
-				checkConstraintExistsSql(schema, table, constraintName, true),
+				dialect.checkConstraintExistsSql(schema, table, constraintName, true),
 			),
 		],
 		execute: [step(`add check constraint "${constraintName}" on "${table}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify check constraint "${constraintName}" exists on "${table}"`,
-				checkConstraintExistsSql(schema, table, constraintName, false),
+				dialect.checkConstraintExistsSql(schema, table, constraintName, false),
 			),
 		],
 	};

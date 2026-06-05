@@ -18,6 +18,9 @@ import { applyMigrations, createIndex, createTable } from "../src/index.ts";
 import { defaultHistoryTable } from "../src/runner/history.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -32,13 +35,13 @@ describe("dryRun: transactional migration", () => {
 			id: 1,
 			parentId: null,
 			operations: [
-				createTable("public", "dryrun_tbl", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "dryrun_tbl", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
 		};
 
-		const result = await applyMigrations([M], { db, dryRun: true });
+		const result = await applyMigrations([M], { dialect, db, dryRun: true });
 
 		expect(result.applied).toEqual([]);
 		expect(result.skippedOps).toEqual([]);
@@ -62,15 +65,15 @@ describe("dryRun: transactional migration", () => {
 			id: 2,
 			parentId: null,
 			operations: [
-				createTable("public", "dryrun_real", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "dryrun_real", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
 		};
 
-		await applyMigrations([M], { db, dryRun: true });
+		await applyMigrations([M], { dialect, db, dryRun: true });
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([2]);
 
 		const exists = await db.queryBool(`SELECT to_regclass('"public"."dryrun_real"') IS NOT NULL`);
@@ -96,15 +99,16 @@ describe("dryRun: outsideTransaction migration", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "val", typeSql: "text" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				createIndex("public", "dryrun_outer", "dryrun_outer_val_idx", ["val"], {
+				createIndex("public", "dryrun_outer", "dryrun_outer_val_idx", ["val"], dialect, {
 					concurrently: true,
 				}),
 			],
 		};
 
-		const result = await applyMigrations([M], { db, dryRun: true });
+		const result = await applyMigrations([M], { dialect, db, dryRun: true });
 
 		expect(result.applied).toEqual([]);
 

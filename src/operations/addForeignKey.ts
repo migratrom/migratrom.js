@@ -1,7 +1,5 @@
-import type { ForeignKeySpec, Operation } from "../types.ts";
-import { constraintExistsSql } from "../sql/catalog.ts";
-import { qualified, quoteIdent, quoteIdentList } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { ForeignKeySpec, Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Add a named foreign-key constraint referencing another table in the same schema.
@@ -11,14 +9,20 @@ import { check, step } from "./helpers.ts";
  * @param spec - Constraint name, local columns, referenced table/columns, and optional referential actions.
  * @returns An idempotent operation that skips when the constraint already exists.
  */
-export function addForeignKey(schema: string, table: string, spec: ForeignKeySpec): Operation {
-	const qTable = qualified(schema, table);
-	const refTable = qualified(schema, spec.references.table);
+export function addForeignKey(
+	schema: string,
+	table: string,
+	spec: ForeignKeySpec,
+	dialect: SQLDialect,
+): Operation {
+	requireCapability(dialect, "addForeignKeys", "ADD FOREIGN KEY constraints");
+	const qTable = dialect.qualified(schema, table);
+	const refTable = dialect.qualified(schema, spec.references.table);
 	const parts = [
 		`ALTER TABLE ${qTable}`,
-		`  ADD CONSTRAINT ${quoteIdent(spec.name)}`,
-		`  FOREIGN KEY (${quoteIdentList(spec.columns)})`,
-		`  REFERENCES ${refTable} (${quoteIdentList(spec.references.columns)})`,
+		`  ADD CONSTRAINT ${dialect.quoteIdent(spec.name)}`,
+		`  FOREIGN KEY (${dialect.quoteIdentList(spec.columns)})`,
+		`  REFERENCES ${refTable} (${dialect.quoteIdentList(spec.references.columns)})`,
 	];
 	if (spec.onDelete) parts.push(`  ON DELETE ${spec.onDelete}`);
 	if (spec.onUpdate) parts.push(`  ON UPDATE ${spec.onUpdate}`);
@@ -30,14 +34,14 @@ export function addForeignKey(schema: string, table: string, spec: ForeignKeySpe
 		precheck: [
 			check(
 				`ensure foreign key "${spec.name}" does not exist on "${table}"`,
-				constraintExistsSql(schema, table, spec.name, true),
+				dialect.constraintExistsSql(schema, table, spec.name, true),
 			),
 		],
 		execute: [step(`add foreign key "${spec.name}" on "${table}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify foreign key "${spec.name}" exists on "${table}"`,
-				constraintExistsSql(schema, table, spec.name, false),
+				dialect.constraintExistsSql(schema, table, spec.name, false),
 			),
 		],
 	};

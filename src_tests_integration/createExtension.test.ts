@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { applyMigrations, createExtension } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -12,10 +15,10 @@ describe("createExtension integration", () => {
 		const M: Migration = {
 			id: 3401,
 			parentId: null,
-			operations: [createExtension("plpgsql")],
+			operations: [createExtension("plpgsql", dialect)],
 		};
 
-		const first = await applyMigrations([M], { db });
+		const first = await applyMigrations([M], { dialect, db });
 		expect(first.applied).toEqual([3401]);
 
 		const exists = await db.queryBool(
@@ -23,7 +26,7 @@ describe("createExtension integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		const second = await applyMigrations([M], { db });
+		const second = await applyMigrations([M], { dialect, db });
 		expect(second.applied).toEqual([]);
 	});
 });

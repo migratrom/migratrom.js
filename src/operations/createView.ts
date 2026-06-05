@@ -1,6 +1,4 @@
-import type { Operation } from "../types.ts";
-import { viewExistsSql } from "../sql/catalog.ts";
-import { qualified } from "../sql/identifiers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
 import { check, step } from "./helpers.ts";
 
 /**
@@ -11,14 +9,21 @@ import { check, step } from "./helpers.ts";
  * @param selectSql - Query body after `AS`; must not include a trailing semicolon.
  * @returns An idempotent operation that skips when the view already exists.
  */
-export function createView(schema: string, name: string, selectSql: string): Operation {
-	const createSql = `CREATE VIEW ${qualified(schema, name)} AS ${selectSql}`;
+export function createView(
+	schema: string,
+	name: string,
+	selectSql: string,
+	dialect: SQLDialect,
+): Operation {
+	const createSql = `CREATE VIEW ${dialect.qualified(schema, name)} AS ${selectSql}`;
 
 	return {
 		id: `view.${name}`,
 		label: `Create view "${name}"`,
-		precheck: [check(`ensure view "${name}" does not exist`, viewExistsSql(schema, name, true))],
+		precheck: [
+			check(`ensure view "${name}" does not exist`, dialect.viewExistsSql(schema, name, true)),
+		],
 		execute: [step(`create view "${name}"`, createSql)],
-		postcheck: [check(`verify view "${name}" exists`, viewExistsSql(schema, name, false))],
+		postcheck: [check(`verify view "${name}" exists`, dialect.viewExistsSql(schema, name, false))],
 	};
 }

@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { addColumn, applyMigrations, createTable, setColumnNotNull } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,13 +16,15 @@ describe("setColumnNotNull integration", () => {
 			id: 3701,
 			parentId: null,
 			operations: [
-				createTable("public", "nn_tbl", [{ name: "id", typeSql: "SERIAL" }], { columns: ["id"] }),
-				addColumn("public", "nn_tbl", { name: "code", typeSql: "text", nullable: true }),
-				setColumnNotNull("public", "nn_tbl", "code"),
+				createTable("public", "nn_tbl", [{ name: "id", typeSql: "SERIAL" }], dialect, {
+					columns: ["id"],
+				}),
+				addColumn("public", "nn_tbl", { name: "code", typeSql: "text", nullable: true }, dialect),
+				setColumnNotNull("public", "nn_tbl", "code", dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([3701]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([3701]);
 
 		const notNull = await db.queryBool(
 			`SELECT EXISTS (

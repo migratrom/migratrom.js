@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { addCheck, applyMigrations, createTable } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,12 +16,12 @@ describe("addCheck integration", () => {
 			id: 3101,
 			parentId: null,
 			operations: [
-				createTable("public", "amounts", [{ name: "n", typeSql: "integer" }]),
-				addCheck("public", "amounts", "amounts_n_positive", "n > 0"),
+				createTable("public", "amounts", [{ name: "n", typeSql: "integer" }], dialect),
+				addCheck("public", "amounts", "amounts_n_positive", "n > 0", dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([3101]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([3101]);
 
 		const exists = await db.queryBool(
 			`SELECT EXISTS (
@@ -28,7 +31,7 @@ describe("addCheck integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		const second = await applyMigrations([M], { db });
+		const second = await applyMigrations([M], { dialect, db });
 		expect(second.applied).toEqual([]);
 	});
 });

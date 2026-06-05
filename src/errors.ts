@@ -84,6 +84,16 @@ export class MigrationChecksumMismatchError extends MigratromError {
 	}
 }
 
+export class UnsupportedFeatureError extends MigratromError {
+	constructor(
+		public feature: string,
+		public dialect: string,
+	) {
+		super(`${feature} is not supported by the ${dialect} dialect`);
+		this.name = new.target.name;
+	}
+}
+
 export class ConfigError extends MigratromError {
 	constructor(message: string) {
 		super(message);

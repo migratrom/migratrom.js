@@ -11,6 +11,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { applyMigrations, createIndex, createTable } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -29,13 +32,14 @@ describe("createIndex integration", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "name", typeSql: "text" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				createIndex("public", "product", "product_name_idx", ["name"]),
+				createIndex("public", "product", "product_name_idx", ["name"], dialect),
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([1]);
 		expect(result.skippedOps).toEqual([]);
 
@@ -63,15 +67,16 @@ describe("createIndex integration", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "slug", typeSql: "text" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				createIndex("public", "article", "article_slug_idx", ["slug"], {
+				createIndex("public", "article", "article_slug_idx", ["slug"], dialect, {
 					concurrently: true,
 				}),
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([2]);
 
 		const indexExists = await db.queryBool(
@@ -94,10 +99,10 @@ describe("createIndex integration", () => {
 		const M: Migration = {
 			id: 3,
 			parentId: null,
-			operations: [createIndex("public", "catalog", "catalog_code_idx", ["code"])],
+			operations: [createIndex("public", "catalog", "catalog_code_idx", ["code"], dialect)],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([3]);
 		expect(result.skippedOps).toEqual(["index.catalog.catalog_code_idx"]);
 	});

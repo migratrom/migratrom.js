@@ -1,4 +1,10 @@
 export { applyMigrations } from "./runner/applyMigrations.ts";
+export { advisoryLockKey } from "./runner/applyMigrations.ts";
+export { PostgresDialect, SQLiteDialect } from "./sql/dialect.ts";
+export { canonicalEncode } from "./checksum/canonicalEncoding.ts";
+export { checksum, parseChecksum, verifyChecksum } from "./checksum/checksum.ts";
+export { UnsupportedFeatureError } from "./errors.ts";
+export type { HashAlgorithm } from "./checksum/hashAlgorithm.ts";
 export { createTable } from "./operations/createTable.ts";
 export { addColumn } from "./operations/addColumn.ts";
 export { addUnique } from "./operations/addUnique.ts";
@@ -33,4 +39,6 @@ export type {
 	ApplyResult,
 	Db,
 	Logger,
+	DialectCapabilities,
+	SQLDialect,
 } from "./types.ts";

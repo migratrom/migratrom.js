@@ -11,6 +11,11 @@ import { applyMigrations, addUnique, createTable } from "../src/index.ts";
 import { defaultHistoryTable, readAppliedIds } from "../src/runner/history.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+import { canonicalEncode } from "../src/checksum/canonicalEncoding.ts";
+import { bytesToHex } from "../src/utilities/encoding/bytes.ts";
+
+const dialect = new PostgresDialect();
 
 const M: Migration = {
 	id: 100,
@@ -23,9 +28,10 @@ const M: Migration = {
 				{ name: "id", typeSql: "SERIAL" },
 				{ name: "email", typeSql: "text" },
 			],
+			dialect,
 			{ columns: ["id"] },
 		),
-		addUnique("public", "user", "user_email_key", ["email"]),
+		addUnique("public", "user", "user_email_key", ["email"], dialect),
 	],
 };
 
@@ -35,11 +41,11 @@ describe("applyMigrations integration", () => {
 
 	/** A pending migration is applied once: schema changes land and the id is remembered. */
 	test("applies migration and records history", async () => {
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([100]);
 		expect(result.skippedOps).toEqual([]);
 
-		const appliedIds = await readAppliedIds(db, defaultHistoryTable());
+		const appliedIds = await readAppliedIds(db, defaultHistoryTable(), dialect);
 		expect(appliedIds.has(100)).toBe(true);
 
 		const tableExists = await db.queryBool(`SELECT to_regclass('"public"."user"') IS NOT NULL`);
@@ -60,7 +66,7 @@ describe("applyMigrations integration", () => {
 	 * checksum at apply time, which is what makes post-deploy edits detectable.
 	 */
 	test("history row has checksum and operations", async () => {
-		await applyMigrations([M], { db });
+		await applyMigrations([M], { dialect, db });
 		const rows = await db.queryRows<{
 			id: number;
 			checksum: string;
@@ -68,13 +74,13 @@ describe("applyMigrations integration", () => {
 		}>(`SELECT id, checksum, operations FROM "${defaultHistoryTable()}"`);
 		expect(rows).toHaveLength(1);
 		expect(Number(rows[0]?.id)).toBe(100);
-		expect(rows[0]?.checksum.length).toBeGreaterThan(0);
-		expect(rows[0]?.operations).toContain("table.user");
+		expect(rows[0]?.checksum).toMatch(/^sha256\/[0-9a-f]{64}$/);
+		expect(rows[0]?.operations).toBe(bytesToHex(canonicalEncode(M.operations)));
 	});
 
 	/** applied_at is set at INSERT time and is always a recent timestamp. */
 	test("history row has applied_at timestamp within last minute", async () => {
-		await applyMigrations([M], { db });
+		await applyMigrations([M], { dialect, db });
 		const rows = await db.queryRows<{ epoch: number | string }>(
 			`SELECT EXTRACT(EPOCH FROM applied_at) AS epoch FROM "${defaultHistoryTable()}"`,
 		);
@@ -103,13 +109,14 @@ describe("applyMigrations addUnique on multiple columns", () => {
 						{ name: "user_id", typeSql: "integer" },
 						{ name: "event_type", typeSql: "text" },
 					],
+					dialect,
 					{ columns: ["user_id", "event_type"] },
 				),
-				addUnique("public", "event", "event_user_type_key", ["user_id", "event_type"]),
+				addUnique("public", "event", "event_user_type_key", ["user_id", "event_type"], dialect),
 			],
 		};
 
-		const result = await applyMigrations([migration], { db });
+		const result = await applyMigrations([migration], { dialect, db });
 		expect(result.applied).toEqual([110]);
 
 		const cols = await db.queryRows<{ attname: string }>(
@@ -139,13 +146,13 @@ describe("applyMigrations skippedOps", () => {
 			id: 120,
 			parentId: null,
 			operations: [
-				createTable("public", "pre_existing", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "pre_existing", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
 		};
 
-		const result = await applyMigrations([migration], { db });
+		const result = await applyMigrations([migration], { dialect, db });
 		expect(result.applied).toEqual([120]);
 		expect(result.skippedOps).toEqual(["table.pre_existing"]);
 
@@ -171,7 +178,7 @@ describe("applyMigrations mixed applied and pending", () => {
 			id: 130,
 			parentId: null,
 			operations: [
-				createTable("public", "alpha", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "alpha", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
@@ -180,15 +187,15 @@ describe("applyMigrations mixed applied and pending", () => {
 			id: 131,
 			parentId: 130,
 			operations: [
-				createTable("public", "beta", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "beta", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
 		};
 
-		await applyMigrations([M1], { db });
+		await applyMigrations([M1], { dialect, db });
 
-		const result = await applyMigrations([M1, M2], { db });
+		const result = await applyMigrations([M1, M2], { dialect, db });
 		expect(result.applied).toEqual([131]);
 		expect(result.skippedOps).toEqual([]);
 
@@ -207,13 +214,17 @@ describe("applyMigrations custom historyTable", () => {
 			id: 140,
 			parentId: null,
 			operations: [
-				createTable("public", "cfg", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "cfg", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
 		};
 
-		const result = await applyMigrations([migration], { db, historyTable: "my_migrations" });
+		const result = await applyMigrations([migration], {
+			dialect,
+			db,
+			historyTable: "my_migrations",
+		});
 		expect(result.applied).toEqual([140]);
 
 		const customExists = await db.queryBool(`SELECT to_regclass('"my_migrations"') IS NOT NULL`);

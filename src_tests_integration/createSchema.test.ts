@@ -3,6 +3,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { applyMigrations, createSchema } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -16,10 +19,10 @@ describe("createSchema integration", () => {
 		const M: Migration = {
 			id: 3301,
 			parentId: null,
-			operations: [createSchema("migratrom_app")],
+			operations: [createSchema("migratrom_app", dialect)],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([3301]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([3301]);
 
 		const exists = await db.queryBool(
 			`SELECT EXISTS (
@@ -28,6 +31,6 @@ describe("createSchema integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([]);
 	});
 });

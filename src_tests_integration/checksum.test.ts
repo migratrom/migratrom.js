@@ -11,12 +11,15 @@ import { applyMigrations, createTable } from "../src/index.ts";
 import { MigrationChecksumMismatchError } from "../src/errors.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const M: Migration = {
 	id: 400,
 	parentId: null,
 	operations: [
-		createTable("public", "widget", [{ name: "id", typeSql: "SERIAL" }], {
+		createTable("public", "widget", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 			columns: ["id"],
 		}),
 	],
@@ -28,13 +31,15 @@ describe("applyMigrations checksum verification", () => {
 
 	/** Changing operations for an already-applied migration id is rejected. */
 	test("rejects edited operations on already-applied migration", async () => {
-		await applyMigrations([M], { db });
+		await applyMigrations([M], { dialect, db });
 
 		const edited: Migration = {
 			...M,
 			operations: [],
 		};
 
-		await expect(applyMigrations([edited], { db })).rejects.toThrow(MigrationChecksumMismatchError);
+		await expect(applyMigrations([edited], { dialect, db })).rejects.toThrow(
+			MigrationChecksumMismatchError,
+		);
 	});
 });

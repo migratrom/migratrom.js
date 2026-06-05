@@ -1,6 +1,4 @@
-import type { ColumnDef, Operation, PrimaryKey } from "../types.ts";
-import { renderColumnList } from "../sql/columns.ts";
-import { qualified, quoteIdentList, regclassLiteral } from "../sql/identifiers.ts";
+import type { ColumnDef, Operation, PrimaryKey, SQLDialect } from "../types.ts";
 import { check, step } from "./helpers.ts";
 
 /**
@@ -20,22 +18,24 @@ export function createTable(
 	schema: string,
 	table: string,
 	columns: ColumnDef[],
+	dialect: SQLDialect,
 	primaryKey?: PrimaryKey,
 ): Operation {
-	const reg = regclassLiteral(schema, table);
-	const lines = [renderColumnList(columns)];
+	const lines = [dialect.renderColumnList(columns)];
 	if (primaryKey) {
-		lines.push(`PRIMARY KEY (${quoteIdentList(primaryKey.columns)})`);
+		lines.push(`PRIMARY KEY (${dialect.quoteIdentList(primaryKey.columns)})`);
 	}
-	const createSql = `CREATE TABLE ${qualified(schema, table)} (\n  ${lines.join(",\n  ")}\n)`;
+	const createSql = `CREATE TABLE ${dialect.qualified(schema, table)} (\n  ${lines.join(",\n  ")}\n)`;
 
 	return {
 		id: `table.${table}`,
 		label: `Create table "${table}"`,
 		precheck: [
-			check(`ensure table "${table}" does not exist`, `SELECT to_regclass(${reg}) IS NULL`),
+			check(`ensure table "${table}" does not exist`, dialect.tableExistsSql(schema, table, true)),
 		],
 		execute: [step(`create table "${table}"`, createSql)],
-		postcheck: [check(`verify table "${table}" exists`, `SELECT to_regclass(${reg}) IS NOT NULL`)],
+		postcheck: [
+			check(`verify table "${table}" exists`, dialect.tableExistsSql(schema, table, false)),
+		],
 	};
 }

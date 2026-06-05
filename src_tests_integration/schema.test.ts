@@ -14,6 +14,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:tes
 import { applyMigrations, addForeignKey, createTable } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -40,12 +43,13 @@ describe("non-public schema operations", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "name", typeSql: "text" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([1]);
 
 		const exists = await db.queryBool(`SELECT to_regclass('"app"."widget"') IS NOT NULL`);
@@ -58,7 +62,7 @@ describe("non-public schema operations", () => {
 			id: 2,
 			parentId: null,
 			operations: [
-				createTable("app", "customer", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("app", "customer", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 				createTable(
@@ -68,17 +72,23 @@ describe("non-public schema operations", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "customer_id", typeSql: "integer" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				addForeignKey("app", "orders", {
-					name: "orders_customer_fkey",
-					columns: ["customer_id"],
-					references: { table: "customer", columns: ["id"] },
-				}),
+				addForeignKey(
+					"app",
+					"orders",
+					{
+						name: "orders_customer_fkey",
+						columns: ["customer_id"],
+						references: { table: "customer", columns: ["id"] },
+					},
+					dialect,
+				),
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([2]);
 
 		const fkExists = await db.queryBool(

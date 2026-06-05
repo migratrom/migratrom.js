@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { constraintExistsSql } from "../sql/catalog.ts";
-import { qualified, quoteIdent, quoteIdentList } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Add a named `UNIQUE` constraint on one or more columns.
@@ -17,9 +15,11 @@ export function addUnique(
 	table: string,
 	constraintName: string,
 	columns: string[],
+	dialect: SQLDialect,
 ): Operation {
-	const qTable = qualified(schema, table);
-	const alterSql = `ALTER TABLE ${qTable} ADD CONSTRAINT ${quoteIdent(constraintName)} UNIQUE (${quoteIdentList(columns)})`;
+	requireCapability(dialect, "addUniqueConstraints", "ADD UNIQUE constraints");
+	const qTable = dialect.qualified(schema, table);
+	const alterSql = `ALTER TABLE ${qTable} ADD CONSTRAINT ${dialect.quoteIdent(constraintName)} UNIQUE (${dialect.quoteIdentList(columns)})`;
 
 	return {
 		id: `unique.${table}.${constraintName}`,
@@ -27,14 +27,14 @@ export function addUnique(
 		precheck: [
 			check(
 				`ensure unique constraint "${constraintName}" does not exist on "${table}"`,
-				constraintExistsSql(schema, table, constraintName, true),
+				dialect.constraintExistsSql(schema, table, constraintName, true),
 			),
 		],
 		execute: [step(`add unique constraint "${constraintName}" on "${table}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify unique constraint "${constraintName}" exists on "${table}"`,
-				constraintExistsSql(schema, table, constraintName, false),
+				dialect.constraintExistsSql(schema, table, constraintName, false),
 			),
 		],
 	};

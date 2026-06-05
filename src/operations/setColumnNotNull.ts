@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { alterTable, columnExistsSql, columnNotNullSql } from "../sql/catalog.ts";
-import { quoteIdent } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Promote a nullable column to `NOT NULL`.
@@ -14,9 +12,15 @@ import { check, step } from "./helpers.ts";
  * @param column - Column to alter.
  * @returns An idempotent operation that skips when the column is already `NOT NULL`.
  */
-export function setColumnNotNull(schema: string, table: string, column: string): Operation {
-	const qTable = alterTable(schema, table);
-	const alterSql = `ALTER TABLE ${qTable} ALTER COLUMN ${quoteIdent(column)} SET NOT NULL`;
+export function setColumnNotNull(
+	schema: string,
+	table: string,
+	column: string,
+	dialect: SQLDialect,
+): Operation {
+	requireCapability(dialect, "alterColumnNotNull", "ALTER COLUMN SET NOT NULL");
+	const qTable = dialect.qualified(schema, table);
+	const alterSql = `ALTER TABLE ${qTable} ALTER COLUMN ${dialect.quoteIdent(column)} SET NOT NULL`;
 
 	return {
 		id: `column_not_null.${table}.${column}`,
@@ -24,18 +28,18 @@ export function setColumnNotNull(schema: string, table: string, column: string):
 		precheck: [
 			check(
 				`ensure column "${column}" exists on "${table}"`,
-				columnExistsSql(schema, table, column, false),
+				dialect.columnExistsSql(schema, table, column, false),
 			),
 			check(
 				`ensure column "${column}" is nullable on "${table}"`,
-				columnNotNullSql(schema, table, column, true),
+				dialect.columnNotNullSql(schema, table, column, true),
 			),
 		],
 		execute: [step(`set NOT NULL on column "${column}" of "${table}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify column "${column}" is NOT NULL on "${table}"`,
-				columnNotNullSql(schema, table, column, false),
+				dialect.columnNotNullSql(schema, table, column, false),
 			),
 		],
 	};

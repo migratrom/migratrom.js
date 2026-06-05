@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { addEnumValue, applyMigrations, createType } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,12 +16,12 @@ describe("addEnumValue integration", () => {
 			id: 4101,
 			parentId: null,
 			operations: [
-				createType("public", "migratrom_color", ["red", "blue"]),
-				addEnumValue("public", "migratrom_color", "green"),
+				createType("public", "migratrom_color", ["red", "blue"], dialect),
+				addEnumValue("public", "migratrom_color", "green", dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([4101]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([4101]);
 
 		const exists = await db.queryBool(
 			`SELECT EXISTS (
@@ -30,7 +33,7 @@ describe("addEnumValue integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		const second = await applyMigrations([M], { db });
+		const second = await applyMigrations([M], { dialect, db });
 		expect(second.applied).toEqual([]);
 	});
 });

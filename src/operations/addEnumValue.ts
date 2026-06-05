@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { enumLabelExistsSql, enumTypeExistsSql } from "../sql/catalog.ts";
-import { qualified, quoteLiteral } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /** Options for {@link addEnumValue}. */
 export interface AddEnumValueOptions {
@@ -25,26 +23,31 @@ export function addEnumValue(
 	schema: string,
 	typeName: string,
 	value: string,
+	dialect: SQLDialect,
 	options?: AddEnumValueOptions,
 ): Operation {
-	const beforeClause = options?.before ? ` BEFORE ${quoteLiteral(options.before)}` : "";
-	const alterSql = `ALTER TYPE ${qualified(schema, typeName)} ADD VALUE ${quoteLiteral(value)}${beforeClause}`;
+	requireCapability(dialect, "enumTypes", "enum values");
+	const beforeClause = options?.before ? ` BEFORE ${dialect.quoteLiteral(options.before)}` : "";
+	const alterSql = `ALTER TYPE ${dialect.qualified(schema, typeName)} ADD VALUE ${dialect.quoteLiteral(value)}${beforeClause}`;
 
 	return {
 		id: `enum.${typeName}.${value}`,
 		label: `Add enum value "${value}" to type "${typeName}"`,
 		precheck: [
-			check(`ensure enum type "${typeName}" exists`, enumTypeExistsSql(schema, typeName, false)),
+			check(
+				`ensure enum type "${typeName}" exists`,
+				dialect.enumTypeExistsSql(schema, typeName, false),
+			),
 			check(
 				`ensure enum value "${value}" does not exist on "${typeName}"`,
-				enumLabelExistsSql(schema, typeName, value, true),
+				dialect.enumLabelExistsSql(schema, typeName, value, true),
 			),
 		],
 		execute: [step(`add enum value "${value}" to "${typeName}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify enum value "${value}" exists on "${typeName}"`,
-				enumLabelExistsSql(schema, typeName, value, false),
+				dialect.enumLabelExistsSql(schema, typeName, value, false),
 			),
 		],
 	};

@@ -9,12 +9,15 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { applyMigrations, createTable } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const M: Migration = {
 	id: 200,
 	parentId: null,
 	operations: [
-		createTable("public", "item", [{ name: "id", typeSql: "SERIAL" }], {
+		createTable("public", "item", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 			columns: ["id"],
 		}),
 	],
@@ -26,10 +29,10 @@ describe("applyMigrations idempotency", () => {
 
 	/** Running the same migration again after a successful apply changes nothing. */
 	test("second apply is a no-op", async () => {
-		const first = await applyMigrations([M], { db });
+		const first = await applyMigrations([M], { dialect, db });
 		expect(first.applied).toEqual([200]);
 
-		const second = await applyMigrations([M], { db });
+		const second = await applyMigrations([M], { dialect, db });
 		expect(second.applied).toEqual([]);
 		expect(second.skippedOps).toEqual([]);
 

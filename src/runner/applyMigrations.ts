@@ -1,10 +1,16 @@
-import { ConfigError, MigrationChecksumMismatchError, MigrationFailedError } from "../errors.ts";
+import { ConfigError, MigrationFailedError } from "../errors.ts";
+import { verifyChecksum } from "../checksum/checksum.ts";
 import { planOrder } from "../graph/dag.ts";
-import type { ApplyOptions, ApplyResult, Db, Logger, Migration, Operation } from "../types.ts";
-import { bytesEqual, bytesToHex, hexToBytes } from "../utilities/encoding/bytes.ts";
-import { decodeHashPacket } from "../utilities/hashes/packet.ts";
+import type {
+	ApplyOptions,
+	ApplyResult,
+	Db,
+	Logger,
+	Migration,
+	Operation,
+	SQLDialect,
+} from "../types.ts";
 import { sha256 } from "../utilities/hashes/sha.ts";
-import { stableStringify } from "../utilities/stableJson.ts";
 import { runOperation } from "./executor.ts";
 import {
 	defaultHistoryTable,
@@ -45,31 +51,52 @@ export async function applyMigrations(
 	if (!options?.db) {
 		throw new ConfigError("applyMigrations requires options.db");
 	}
+	if (!options.dialect) {
+		throw new ConfigError("applyMigrations requires options.dialect");
+	}
 
+	const advisoryLock = options.advisoryLock ?? true;
+	if (advisoryLock && options.dialect.capabilities.advisoryLocks) {
+		const runLocked = async (): Promise<ApplyResult> => {
+			const key = await advisoryLockKey(options.historyTable ?? defaultHistoryTable());
+			await options.dialect.acquireLock(options.db, key);
+			try {
+				const result = await applyMigrationsUnlocked(migrations, options);
+				await options.dialect.releaseLock(options.db, key);
+				return result;
+			} catch (error) {
+				try {
+					await options.dialect.releaseLock(options.db, key);
+				} catch {
+					// Preserve the migration failure.
+				}
+				throw error;
+			}
+		};
+		return options.db.withConnection ? options.db.withConnection(runLocked) : runLocked();
+	}
+	return applyMigrationsUnlocked(migrations, options);
+}
+
+async function applyMigrationsUnlocked(
+	migrations: Migration[],
+	options: ApplyOptions,
+): Promise<ApplyResult> {
 	const db = options.db;
+	const dialect = options.dialect;
 	const historyTable = options.historyTable ?? defaultHistoryTable();
 	const logger = options.logger ?? consoleLogger;
 	const dryRun = options.dryRun ?? false;
 
-	await ensureHistoryTable(db, historyTable);
-	const appliedIds = await readAppliedIds(db, historyTable);
-	const storedRecords = await readAppliedRecords(db, historyTable);
+	await ensureHistoryTable(db, historyTable, dialect);
+	const appliedIds = await readAppliedIds(db, historyTable, dialect);
+	const storedRecords = await readAppliedRecords(db, historyTable, dialect);
 
 	for (const m of migrations) {
 		if (!appliedIds.has(m.id)) continue;
 		const stored = storedRecords.get(m.id);
 		if (stored === undefined) continue;
-		const actualPayload = stableStringify(m.operations);
-		const payloadHash = await sha256(actualPayload);
-		const storedChecksumDecoded = decodeHashPacket(hexToBytes(stored.checksum));
-
-		if (!bytesEqual(storedChecksumDecoded[1], payloadHash.bytes)) {
-			throw new MigrationChecksumMismatchError(
-				m.id,
-				bytesToHex(storedChecksumDecoded[1]),
-				payloadHash.toHex(),
-			);
-		}
+		await verifyChecksum(stored.checksum, m.operations, m.id);
 	}
 
 	const pending = planOrder(migrations, appliedIds);
@@ -106,12 +133,12 @@ export async function applyMigrations(
 
 			if (hasOutside) {
 				await runMigrationOps(migration.operations, db, logger, skippedOps, {
-					recordHistory: { table: historyTable, migration },
+					recordHistory: { table: historyTable, migration, dialect },
 				});
 			} else {
 				await db.withTransaction(async () => {
 					await runMigrationOps(migration.operations, db, logger, skippedOps);
-					await recordMigration(db, historyTable, migration);
+					await recordMigration(db, historyTable, migration, dialect);
 				});
 			}
 			applied.push(migration.id);
@@ -123,6 +150,16 @@ export async function applyMigrations(
 	return { applied, skippedOps };
 }
 
+/** First eight SHA-256 bytes interpreted as a signed, big-endian 64-bit integer. */
+export async function advisoryLockKey(historyTable: string): Promise<bigint> {
+	const bytes = (await sha256(historyTable)).bytes;
+	let unsigned = 0n;
+	for (const byte of bytes.subarray(0, 8)) {
+		unsigned = (unsigned << 8n) | BigInt(byte);
+	}
+	return unsigned >= 0x8000000000000000n ? unsigned - 0x10000000000000000n : unsigned;
+}
+
 async function runMigrationOps(
 	operations: Operation[],
 	db: Db,
@@ -132,7 +169,7 @@ async function runMigrationOps(
 		dryRun?: boolean;
 		onOp?: (op: Operation) => void;
 		segmentedTx?: boolean;
-		recordHistory?: { table: string; migration: Migration };
+		recordHistory?: { table: string; migration: Migration; dialect: SQLDialect };
 	},
 ): Promise<void> {
 	const dryRun = options?.dryRun ?? false;
@@ -150,7 +187,12 @@ async function runMigrationOps(
 				if (result === "skipped") skippedOps.push(op.id);
 			}
 			if (final && options?.recordHistory) {
-				await recordMigration(db, options.recordHistory.table, options.recordHistory.migration);
+				await recordMigration(
+					db,
+					options.recordHistory.table,
+					options.recordHistory.migration,
+					options.recordHistory.dialect,
+				);
 			}
 			if (dryRun && segmented) throw new DryRunRollback();
 		};

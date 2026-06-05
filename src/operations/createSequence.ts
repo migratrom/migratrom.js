@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { regclassExistsSql } from "../sql/catalog.ts";
-import { qualified } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Create a standalone sequence in the given schema.
@@ -10,16 +8,19 @@ import { check, step } from "./helpers.ts";
  * @param name - Unqualified sequence name.
  * @returns An idempotent operation that skips when the sequence already exists.
  */
-export function createSequence(schema: string, name: string): Operation {
-	const createSql = `CREATE SEQUENCE ${qualified(schema, name)}`;
+export function createSequence(schema: string, name: string, dialect: SQLDialect): Operation {
+	requireCapability(dialect, "sequences", "sequences");
+	const createSql = `CREATE SEQUENCE ${dialect.qualified(schema, name)}`;
 
 	return {
 		id: `sequence.${name}`,
 		label: `Create sequence "${name}"`,
 		precheck: [
-			check(`ensure sequence "${name}" does not exist`, regclassExistsSql(schema, name, true)),
+			check(`ensure sequence "${name}" does not exist`, dialect.tableExistsSql(schema, name, true)),
 		],
 		execute: [step(`create sequence "${name}"`, createSql)],
-		postcheck: [check(`verify sequence "${name}" exists`, regclassExistsSql(schema, name, false))],
+		postcheck: [
+			check(`verify sequence "${name}" exists`, dialect.tableExistsSql(schema, name, false)),
+		],
 	};
 }

@@ -5,6 +5,7 @@ export default defineConfig({
 		entry: {
 			index: "src/index.ts",
 			"adapters/postgres": "src/adapters/postgres.ts",
+			"adapters/sqlite": "src/adapters/sqlite.ts",
 		},
 		format: ["esm"],
 		dts: true,

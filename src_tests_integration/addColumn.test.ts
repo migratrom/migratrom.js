@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { addColumn, applyMigrations, createTable } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,23 +16,30 @@ describe("addColumn integration", () => {
 			id: 3001,
 			parentId: null,
 			operations: [
-				createTable("public", "user", [{ name: "id", typeSql: "SERIAL" }], { columns: ["id"] }),
+				createTable("public", "user", [{ name: "id", typeSql: "SERIAL" }], dialect, {
+					columns: ["id"],
+				}),
 			],
 		};
 		const M2: Migration = {
 			id: 3002,
 			parentId: 3001,
 			operations: [
-				addColumn("public", "user", { name: "email", typeSql: "text" }),
-				addColumn("public", "user", {
-					name: "role",
-					typeSql: "text",
-					defaultSql: "DEFAULT 'user'",
-				}),
+				addColumn("public", "user", { name: "email", typeSql: "text" }, dialect),
+				addColumn(
+					"public",
+					"user",
+					{
+						name: "role",
+						typeSql: "text",
+						defaultSql: "DEFAULT 'user'",
+					},
+					dialect,
+				),
 			],
 		};
 
-		expect((await applyMigrations([M1, M2], { db })).applied).toEqual([3001, 3002]);
+		expect((await applyMigrations([M1, M2], { dialect, db })).applied).toEqual([3001, 3002]);
 
 		const emailExists = await db.queryBool(
 			`SELECT EXISTS (
@@ -45,7 +55,7 @@ describe("addColumn integration", () => {
 			id: 3003,
 			parentId: null,
 			operations: [
-				createTable("public", "col_user", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "col_user", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
@@ -54,12 +64,12 @@ describe("addColumn integration", () => {
 			id: 3004,
 			parentId: 3003,
 			operations: [
-				addColumn("public", "col_user", { name: "note", typeSql: "text", nullable: true }),
+				addColumn("public", "col_user", { name: "note", typeSql: "text", nullable: true }, dialect),
 			],
 		};
 
-		await applyMigrations([M1, M2], { db });
-		const second = await applyMigrations([M1, M2], { db });
+		await applyMigrations([M1, M2], { dialect, db });
+		const second = await applyMigrations([M1, M2], { dialect, db });
 		expect(second.applied).toEqual([]);
 	});
 
@@ -70,11 +80,13 @@ describe("addColumn integration", () => {
 				id: 3005,
 				parentId: null,
 				operations: [
-					createTable("app", "widget", [{ name: "id", typeSql: "SERIAL" }], { columns: ["id"] }),
-					addColumn("app", "widget", { name: "label", typeSql: "text", nullable: true }),
+					createTable("app", "widget", [{ name: "id", typeSql: "SERIAL" }], dialect, {
+						columns: ["id"],
+					}),
+					addColumn("app", "widget", { name: "label", typeSql: "text", nullable: true }, dialect),
 				],
 			};
-			await applyMigrations([M], { db });
+			await applyMigrations([M], { dialect, db });
 			const exists = await db.queryBool(
 				`SELECT EXISTS (
 					SELECT 1 FROM information_schema.columns

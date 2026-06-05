@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { addColumn, applyMigrations, createTable, setColumnDefault } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,13 +16,20 @@ describe("setColumnDefault integration", () => {
 			id: 3601,
 			parentId: null,
 			operations: [
-				createTable("public", "def_tbl", [{ name: "id", typeSql: "SERIAL" }], { columns: ["id"] }),
-				addColumn("public", "def_tbl", { name: "status", typeSql: "text", nullable: true }),
-				setColumnDefault("public", "def_tbl", "status", "DEFAULT 'open'"),
+				createTable("public", "def_tbl", [{ name: "id", typeSql: "SERIAL" }], dialect, {
+					columns: ["id"],
+				}),
+				addColumn(
+					"public",
+					"def_tbl",
+					{ name: "status", typeSql: "text", nullable: true },
+					dialect,
+				),
+				setColumnDefault("public", "def_tbl", "status", "DEFAULT 'open'", dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([3601]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([3601]);
 
 		const hasDefault = await db.queryBool(
 			`SELECT EXISTS (
@@ -30,6 +40,6 @@ describe("setColumnDefault integration", () => {
 		);
 		expect(hasDefault).toBe(true);
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([]);
 	});
 });

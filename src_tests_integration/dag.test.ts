@@ -11,12 +11,15 @@ import { applyMigrations, addForeignKey, createTable } from "../src/index.ts";
 import { defaultHistoryTable } from "../src/runner/history.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const userMigration: Migration = {
 	id: 300,
 	parentId: null,
 	operations: [
-		createTable("public", "user", [{ name: "id", typeSql: "SERIAL" }], {
+		createTable("public", "user", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 			columns: ["id"],
 		}),
 	],
@@ -33,13 +36,19 @@ const postMigration: Migration = {
 				{ name: "id", typeSql: "SERIAL" },
 				{ name: "authorId", typeSql: "integer" },
 			],
+			dialect,
 			{ columns: ["id"] },
 		),
-		addForeignKey("public", "post", {
-			name: "post_authorId_fkey",
-			columns: ["authorId"],
-			references: { table: "user", columns: ["id"] },
-		}),
+		addForeignKey(
+			"public",
+			"post",
+			{
+				name: "post_authorId_fkey",
+				columns: ["authorId"],
+				references: { table: "user", columns: ["id"] },
+			},
+			dialect,
+		),
 	],
 };
 
@@ -49,7 +58,7 @@ describe("applyMigrations dag ordering", () => {
 
 	/** A child migration listed before its parent still applies in dependency order. */
 	test("applies parent before child with foreign key", async () => {
-		const result = await applyMigrations([postMigration, userMigration], { db });
+		const result = await applyMigrations([postMigration, userMigration], { dialect, db });
 		expect(result.applied).toEqual([300, 301]);
 
 		const fkExists = await db.queryBool(
@@ -67,7 +76,7 @@ describe("applyMigrations dag ordering", () => {
 	 * enabling external tooling to reconstruct the apply order from history alone.
 	 */
 	test("parent_id values written correctly to history", async () => {
-		await applyMigrations([postMigration, userMigration], { db });
+		await applyMigrations([postMigration, userMigration], { dialect, db });
 
 		const rows = await db.queryRows<{
 			id: number | string;
@@ -92,7 +101,7 @@ describe("applyMigrations addForeignKey with onDelete", () => {
 			id: 310,
 			parentId: null,
 			operations: [
-				createTable("public", "account", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "account", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
@@ -108,18 +117,24 @@ describe("applyMigrations addForeignKey with onDelete", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "account_id", typeSql: "integer" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				addForeignKey("public", "message", {
-					name: "message_account_fkey",
-					columns: ["account_id"],
-					references: { table: "account", columns: ["id"] },
-					onDelete: "CASCADE",
-				}),
+				addForeignKey(
+					"public",
+					"message",
+					{
+						name: "message_account_fkey",
+						columns: ["account_id"],
+						references: { table: "account", columns: ["id"] },
+						onDelete: "CASCADE",
+					},
+					dialect,
+				),
 			],
 		};
 
-		await applyMigrations([accountM, messageM], { db });
+		await applyMigrations([accountM, messageM], { dialect, db });
 
 		// confdeltype 'c' = CASCADE in pg_constraint
 		const rows = await db.queryRows<{ confdeltype: string }>(
@@ -143,7 +158,7 @@ describe("applyMigrations three-migration chain", () => {
 			id: 320,
 			parentId: null,
 			operations: [
-				createTable("public", "org", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "org", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 			],
@@ -159,13 +174,19 @@ describe("applyMigrations three-migration chain", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "org_id", typeSql: "integer" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				addForeignKey("public", "team", {
-					name: "team_org_fkey",
-					columns: ["org_id"],
-					references: { table: "org", columns: ["id"] },
-				}),
+				addForeignKey(
+					"public",
+					"team",
+					{
+						name: "team_org_fkey",
+						columns: ["org_id"],
+						references: { table: "org", columns: ["id"] },
+					},
+					dialect,
+				),
 			],
 		};
 		const M3: Migration = {
@@ -179,18 +200,24 @@ describe("applyMigrations three-migration chain", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "team_id", typeSql: "integer" },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				addForeignKey("public", "member", {
-					name: "member_team_fkey",
-					columns: ["team_id"],
-					references: { table: "team", columns: ["id"] },
-				}),
+				addForeignKey(
+					"public",
+					"member",
+					{
+						name: "member_team_fkey",
+						columns: ["team_id"],
+						references: { table: "team", columns: ["id"] },
+					},
+					dialect,
+				),
 			],
 		};
 
 		// Submit in reverse order: deepest child first
-		const result = await applyMigrations([M3, M2, M1], { db });
+		const result = await applyMigrations([M3, M2, M1], { dialect, db });
 		expect(result.applied).toEqual([320, 321, 322]);
 
 		const memberFkExists = await db.queryBool(

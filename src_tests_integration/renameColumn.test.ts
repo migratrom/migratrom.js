@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { applyMigrations, createTable, renameColumn } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -20,13 +23,14 @@ describe("renameColumn integration", () => {
 						{ name: "id", typeSql: "SERIAL" },
 						{ name: "old_name", typeSql: "text", nullable: true },
 					],
+					dialect,
 					{ columns: ["id"] },
 				),
-				renameColumn("public", "ren_col", "old_name", "new_name"),
+				renameColumn("public", "ren_col", "old_name", "new_name", dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([3801]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([3801]);
 
 		const exists = await db.queryBool(
 			`SELECT EXISTS (
@@ -36,6 +40,6 @@ describe("renameColumn integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([]);
 	});
 });

@@ -1,13 +1,14 @@
 {
 	"name": "migratrom",
 	"version": "0.0.3",
-	"description": "PostgreSQL schema migrations for Bun, Node, and Deno",
+	"description": "PostgreSQL and SQLite schema migrations for Bun, Node, and Deno",
 	"keywords": [
 		"bun",
 		"ddl",
 		"migrations",
 		"postgresql",
-		"schema"
+		"schema",
+		"sqlite"
 	],
 	"homepage": "https://github.com/mofax/migratrom#readme",
 	"bugs": {
@@ -34,6 +35,10 @@
 		"./adapters/postgres": {
 			"types": "./dist/adapters/postgres.d.ts",
 			"import": "./dist/adapters/postgres.js"
+		},
+		"./adapters/sqlite": {
+			"types": "./dist/adapters/sqlite.d.ts",
+			"import": "./dist/adapters/sqlite.js"
 		}
 	},
 	"scripts": {
@@ -42,21 +47,24 @@
 		"prepublishOnly": "vp pack",
 		"test:unit": "bun test src_tests/",
 		"test:integration": "bun src_tests_integration/harness.ts",
-		"fmt": "oxfmt",
-		"lint": "oxlint"
-	},
-	"dependencies": {
-		"cbor-x": "^1.6.4"
+		"test:sqlite-smoke": "bun scripts/sqlite-smoke.mjs",
+		"fmt": "vp fmt -c .oxfmtrc.json",
+		"lint": "vp lint"
 	},
 	"devDependencies": {
 		"@types/bun": "latest",
+		"libsql": "^0.5.29",
 		"postgres": "^3.4.5",
 		"vite-plus": "latest"
 	},
 	"peerDependencies": {
+		"libsql": "^0.5.29",
 		"postgres": "^3.4.0"
 	},
 	"peerDependenciesMeta": {
+		"libsql": {
+			"optional": true
+		},
 		"postgres": {
 			"optional": true
 		}

@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { alterTable, columnDefaultSetSql, columnExistsSql } from "../sql/catalog.ts";
-import { quoteIdent } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Set a default expression on an existing column.
@@ -20,9 +18,11 @@ export function setColumnDefault(
 	table: string,
 	column: string,
 	defaultSql: string,
+	dialect: SQLDialect,
 ): Operation {
-	const qTable = alterTable(schema, table);
-	const alterSql = `ALTER TABLE ${qTable} ALTER COLUMN ${quoteIdent(column)} SET ${defaultSql}`;
+	requireCapability(dialect, "alterColumnDefault", "ALTER COLUMN SET DEFAULT");
+	const qTable = dialect.qualified(schema, table);
+	const alterSql = `ALTER TABLE ${qTable} ALTER COLUMN ${dialect.quoteIdent(column)} SET ${defaultSql}`;
 
 	return {
 		id: `column_default.${table}.${column}`,
@@ -30,18 +30,18 @@ export function setColumnDefault(
 		precheck: [
 			check(
 				`ensure column "${column}" exists on "${table}"`,
-				columnExistsSql(schema, table, column, false),
+				dialect.columnExistsSql(schema, table, column, false),
 			),
 			check(
 				`ensure column "${column}" has no default yet on "${table}"`,
-				columnDefaultSetSql(schema, table, column, true),
+				dialect.columnDefaultSetSql(schema, table, column, true),
 			),
 		],
 		execute: [step(`set default on column "${column}" of "${table}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify column "${column}" has a default on "${table}"`,
-				columnDefaultSetSql(schema, table, column, false),
+				dialect.columnDefaultSetSql(schema, table, column, false),
 			),
 		],
 	};

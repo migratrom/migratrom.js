@@ -1,6 +1,5 @@
-import type { CreateIndexOptions, Operation } from "../types.ts";
-import { qualified, quoteIdent, quoteIdentList, regclassLiteral } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { CreateIndexOptions, Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Create a btree index on one or more table columns.
@@ -22,23 +21,28 @@ export function createIndex(
 	table: string,
 	indexName: string,
 	columns: string[],
+	dialect: SQLDialect,
 	options?: CreateIndexOptions,
 ): Operation {
 	const concurrently = options?.concurrently ?? false;
-	const reg = regclassLiteral(schema, indexName);
-	const concurrentlySql = concurrently ? " CONCURRENTLY" : "";
-	const createSql = `CREATE INDEX${concurrentlySql} ${quoteIdent(indexName)} ON ${qualified(schema, table)} (${quoteIdentList(columns)})`;
+	if (concurrently) {
+		requireCapability(dialect, "concurrentIndexes", "CREATE INDEX CONCURRENTLY");
+	}
+	const createSql = dialect.createIndexSql(schema, table, indexName, columns, concurrently);
 	const labelSuffix = concurrently ? " concurrently" : "";
 
 	return {
 		id: `index.${table}.${indexName}`,
 		label: `Create index${labelSuffix} "${indexName}" on "${table}"`,
 		precheck: [
-			check(`ensure index "${indexName}" does not exist`, `SELECT to_regclass(${reg}) IS NULL`),
+			check(
+				`ensure index "${indexName}" does not exist`,
+				dialect.tableExistsSql(schema, indexName, true),
+			),
 		],
 		execute: [step(`create index${labelSuffix} "${indexName}" on "${table}"`, createSql)],
 		postcheck: [
-			check(`verify index "${indexName}" exists`, `SELECT to_regclass(${reg}) IS NOT NULL`),
+			check(`verify index "${indexName}" exists`, dialect.tableExistsSql(schema, indexName, false)),
 		],
 		...(concurrently ? { outsideTransaction: true } : {}),
 	};

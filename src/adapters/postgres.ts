@@ -5,6 +5,7 @@ import { CheckShapeError } from "../errors.ts";
 import type { Db } from "../types.ts";
 
 type SqlExec = Pick<postgres.Sql, "unsafe">;
+type SqlConnection = Pick<postgres.ReservedSql, "unsafe" | "release">;
 
 function parseCheckFromRows(rows: unknown[], sql: string): boolean {
 	try {
@@ -39,7 +40,8 @@ function parseScalarFromRows<T>(rows: unknown[], sql: string): T | undefined {
  */
 export function postgresAdapter(sql: postgres.Sql): Db {
 	const txCtx = createTxContext<SqlExec>();
-	const resolve = (): SqlExec => txCtx.getActive() ?? sql;
+	const connectionCtx = createTxContext<SqlConnection>();
+	const resolve = (): SqlExec => txCtx.getActive() ?? connectionCtx.getActive() ?? sql;
 
 	return {
 		async queryBool(rawSql: string): Promise<boolean> {
@@ -63,8 +65,35 @@ export function postgresAdapter(sql: postgres.Sql): Db {
 
 		async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
 			if (txCtx.getActive()) return fn();
-			const result = await sql.begin(async (tx) => txCtx.run(tx, fn));
-			return result as T;
+			const connection = connectionCtx.getActive();
+			if (!connection) {
+				const result = await sql.begin(async (tx) => txCtx.run(tx, fn));
+				return result as T;
+			}
+
+			await connection.unsafe("BEGIN");
+			try {
+				const result = await txCtx.run(connection, fn);
+				await connection.unsafe("COMMIT");
+				return result;
+			} catch (error) {
+				try {
+					await connection.unsafe("ROLLBACK");
+				} catch {
+					// Preserve the original transaction failure.
+				}
+				throw error;
+			}
+		},
+
+		async withConnection<T>(fn: () => Promise<T>): Promise<T> {
+			if (connectionCtx.getActive()) return fn();
+			const connection = await sql.reserve();
+			try {
+				return await connectionCtx.run(connection, fn);
+			} finally {
+				connection.release();
+			}
 		},
 	};
 }

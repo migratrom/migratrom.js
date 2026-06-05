@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { addPrimaryKey, applyMigrations, createTable } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,12 +16,12 @@ describe("addPrimaryKey integration", () => {
 			id: 3201,
 			parentId: null,
 			operations: [
-				createTable("public", "pk_tbl", [{ name: "id", typeSql: "SERIAL" }]),
-				addPrimaryKey("public", "pk_tbl", "pk_tbl_pkey", ["id"]),
+				createTable("public", "pk_tbl", [{ name: "id", typeSql: "SERIAL" }], dialect),
+				addPrimaryKey("public", "pk_tbl", "pk_tbl_pkey", ["id"], dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([3201]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([3201]);
 
 		const exists = await db.queryBool(
 			`SELECT EXISTS (
@@ -28,6 +31,6 @@ describe("addPrimaryKey integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([]);
 	});
 });

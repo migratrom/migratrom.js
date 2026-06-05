@@ -13,6 +13,9 @@ import { MigrationFailedError } from "../src/errors.ts";
 import { defaultHistoryTable } from "../src/runner/history.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -28,7 +31,7 @@ describe("migration atomicity", () => {
 			id: 1,
 			parentId: null,
 			operations: [
-				createTable("public", "atomic_tbl", [{ name: "id", typeSql: "SERIAL" }], {
+				createTable("public", "atomic_tbl", [{ name: "id", typeSql: "SERIAL" }], dialect, {
 					columns: ["id"],
 				}),
 				rawSql({
@@ -49,7 +52,7 @@ describe("migration atomicity", () => {
 			],
 		};
 
-		await expect(applyMigrations([M], { db })).rejects.toThrow(MigrationFailedError);
+		await expect(applyMigrations([M], { dialect, db })).rejects.toThrow(MigrationFailedError);
 
 		// Table from the first op must have been rolled back
 		const tableExists = await db.queryBool(
@@ -89,7 +92,7 @@ describe("migration atomicity", () => {
 
 		let thrown: unknown;
 		try {
-			await applyMigrations([M], { db });
+			await applyMigrations([M], { dialect, db });
 		} catch (err) {
 			thrown = err;
 		}

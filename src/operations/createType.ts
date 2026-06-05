@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { enumTypeExistsSql } from "../sql/catalog.ts";
-import { qualified, quoteLiteral } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Create a PostgreSQL `ENUM` type with the given labels.
@@ -13,17 +11,25 @@ import { check, step } from "./helpers.ts";
  * @param labels - Enum member strings, in declaration order.
  * @returns An idempotent operation that skips when the type already exists.
  */
-export function createType(schema: string, name: string, labels: string[]): Operation {
-	const labelList = labels.map((l) => quoteLiteral(l)).join(", ");
-	const createSql = `CREATE TYPE ${qualified(schema, name)} AS ENUM (${labelList})`;
+export function createType(
+	schema: string,
+	name: string,
+	labels: string[],
+	dialect: SQLDialect,
+): Operation {
+	requireCapability(dialect, "enumTypes", "enum types");
+	const labelList = labels.map((label) => dialect.quoteLiteral(label)).join(", ");
+	const createSql = `CREATE TYPE ${dialect.qualified(schema, name)} AS ENUM (${labelList})`;
 
 	return {
 		id: `type.${name}`,
 		label: `Create enum type "${name}"`,
 		precheck: [
-			check(`ensure type "${name}" does not exist`, enumTypeExistsSql(schema, name, true)),
+			check(`ensure type "${name}" does not exist`, dialect.enumTypeExistsSql(schema, name, true)),
 		],
 		execute: [step(`create enum type "${name}"`, createSql)],
-		postcheck: [check(`verify type "${name}" exists`, enumTypeExistsSql(schema, name, false))],
+		postcheck: [
+			check(`verify type "${name}" exists`, dialect.enumTypeExistsSql(schema, name, false)),
+		],
 	};
 }

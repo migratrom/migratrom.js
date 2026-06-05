@@ -12,6 +12,9 @@ import { applyMigrations, rawSql } from "../src/index.ts";
 import { MigrationFailedError, PrecheckFailedError } from "../src/errors.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -36,7 +39,7 @@ describe("rawSql integration", () => {
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([1]);
 		expect(result.skippedOps).toEqual([]);
 
@@ -64,7 +67,7 @@ describe("rawSql integration", () => {
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([2]);
 		expect(result.skippedOps).toEqual(["seq.pre_seq"]);
 	});
@@ -94,7 +97,7 @@ describe("rawSql integration", () => {
 
 		let thrown: unknown;
 		try {
-			await applyMigrations([M], { db });
+			await applyMigrations([M], { dialect, db });
 		} catch (err) {
 			thrown = err;
 		}
@@ -125,7 +128,7 @@ describe("rawSql integration", () => {
 			],
 		};
 
-		const result = await applyMigrations([M], { db });
+		const result = await applyMigrations([M], { dialect, db });
 		expect(result.applied).toEqual([4]);
 
 		const exists = await db.queryBool(`SELECT to_regclass('"public"."gated_seq"') IS NOT NULL`);

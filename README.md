@@ -1,6 +1,10 @@
 # migratrom
 
-PostgreSQL schema migrations for Bun, Node, and Deno. Migrations are plain TypeScript objects with idempotent, self-verifying operations.
+Declarative, self-verifying PostgreSQL and SQLite schema migrations for Bun,
+Node, and Deno.
+
+The core is driver-independent. SQL generation and feature support are selected
+explicitly with `PostgresDialect` or `SQLiteDialect`.
 
 ## Operations
 
@@ -35,15 +39,22 @@ bun add migratrom
 npm install migratrom
 ```
 
-`postgres` is only required when using `migratrom/adapters/postgres`.
+Install the optional driver used by your database:
+
+```bash
+bun add postgres # PostgreSQL
+bun add libsql   # local or in-memory SQLite
+```
 
 ## Usage
 
 ```ts
-import { applyMigrations, createTable, addUnique, addColumn } from "migratrom";
+import { applyMigrations, createTable, addUnique, addColumn, PostgresDialect } from "migratrom";
 import { postgresAdapter } from "migratrom/adapters/postgres";
 import type { Migration } from "migratrom";
 import postgres from "postgres";
+
+const dialect = new PostgresDialect();
 
 const M: Migration = {
 	id: 2390,
@@ -56,9 +67,10 @@ const M: Migration = {
 				{ name: "id", typeSql: "SERIAL" },
 				{ name: "email", typeSql: "text" },
 			],
+			dialect,
 			{ columns: ["id"] },
 		),
-		addUnique("public", "user", "user_email_key", ["email"]),
+		addUnique("public", "user", "user_email_key", ["email"], dialect),
 	],
 };
 
@@ -66,25 +78,79 @@ const M2: Migration = {
 	id: 2391,
 	parentId: 2390,
 	operations: [
-		addColumn("public", "user", { name: "password_hash", typeSql: "text" }),
-		addColumn("public", "user", {
-			name: "role",
-			typeSql: "text",
-			defaultSql: "DEFAULT 'user'",
-		}),
-		addColumn("public", "user", {
-			name: "created_at",
-			typeSql: "TIMESTAMP WITH TIME ZONE",
-			defaultSql: "DEFAULT CURRENT_TIMESTAMP",
-		}),
-		addColumn("public", "user", {
-			name: "updated_at",
-			typeSql: "TIMESTAMP WITH TIME ZONE",
-			defaultSql: "DEFAULT CURRENT_TIMESTAMP",
-		}),
+		addColumn("public", "user", { name: "password_hash", typeSql: "text" }, dialect),
+		addColumn(
+			"public",
+			"user",
+			{
+				name: "role",
+				typeSql: "text",
+				defaultSql: "DEFAULT 'user'",
+			},
+			dialect,
+		),
+		addColumn(
+			"public",
+			"user",
+			{
+				name: "created_at",
+				typeSql: "TIMESTAMP WITH TIME ZONE",
+				defaultSql: "DEFAULT CURRENT_TIMESTAMP",
+			},
+			dialect,
+		),
+		addColumn(
+			"public",
+			"user",
+			{
+				name: "updated_at",
+				typeSql: "TIMESTAMP WITH TIME ZONE",
+				defaultSql: "DEFAULT CURRENT_TIMESTAMP",
+			},
+			dialect,
+		),
 	],
 };
 
 const sql = postgres(process.env.DATABASE_URL!);
-await applyMigrations([M, M2], { db: postgresAdapter(sql) });
+await applyMigrations([M, M2], { db: postgresAdapter(sql), dialect });
 ```
+
+## SQLite
+
+The bundled SQLite adapter targets the cross-runtime `libsql` package:
+
+```ts
+import Database from "libsql";
+import { applyMigrations, createIndex, createTable, SQLiteDialect } from "migratrom";
+import { libsqlAdapter } from "migratrom/adapters/sqlite";
+
+const database = new Database("app.sqlite");
+const db = libsqlAdapter(database);
+const dialect = new SQLiteDialect();
+
+const migration: Migration = {
+	id: 1,
+	parentId: null,
+	operations: [
+		createTable(
+			"main",
+			"users",
+			[
+				{ name: "id", typeSql: "INTEGER" },
+				{ name: "email", typeSql: "TEXT" },
+			],
+			dialect,
+			{ columns: ["id"] },
+		),
+		createIndex("main", "users", "users_email_idx", ["email"], dialect),
+	],
+};
+
+await applyMigrations([migration], { db, dialect });
+database.close();
+```
+
+SQLite supports table creation with inline constraints, adding columns,
+non-concurrent indexes, views, table/column renames, and `rawSql`. Builders for
+PostgreSQL-only features throw `UnsupportedFeatureError`.

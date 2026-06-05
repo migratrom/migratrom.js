@@ -3,6 +3,9 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { applyMigrations, createTable, createView } from "../src/index.ts";
 import type { Migration } from "../src/types.ts";
 import { connectDb } from "./connect.ts";
+import { PostgresDialect } from "../src/sql/dialect.ts";
+
+const dialect = new PostgresDialect();
 
 const { db, close } = connectDb();
 afterAll(() => close());
@@ -13,12 +16,14 @@ describe("createView integration", () => {
 			id: 4201,
 			parentId: null,
 			operations: [
-				createTable("public", "view_src", [{ name: "id", typeSql: "SERIAL" }], { columns: ["id"] }),
-				createView("public", "view_src_ids", "SELECT id FROM public.view_src"),
+				createTable("public", "view_src", [{ name: "id", typeSql: "SERIAL" }], dialect, {
+					columns: ["id"],
+				}),
+				createView("public", "view_src_ids", "SELECT id FROM public.view_src", dialect),
 			],
 		};
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([4201]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([4201]);
 
 		const exists = await db.queryBool(
 			`SELECT EXISTS (
@@ -28,6 +33,6 @@ describe("createView integration", () => {
 		);
 		expect(exists).toBe(true);
 
-		expect((await applyMigrations([M], { db })).applied).toEqual([]);
+		expect((await applyMigrations([M], { dialect, db })).applied).toEqual([]);
 	});
 });

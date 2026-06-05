@@ -1,7 +1,5 @@
-import type { Operation } from "../types.ts";
-import { alterTable, constraintExistsSql } from "../sql/catalog.ts";
-import { quoteIdent, quoteIdentList } from "../sql/identifiers.ts";
-import { check, step } from "./helpers.ts";
+import type { Operation, SQLDialect } from "../types.ts";
+import { check, requireCapability, step } from "./helpers.ts";
 
 /**
  * Add a named `PRIMARY KEY` constraint on existing columns.
@@ -19,9 +17,11 @@ export function addPrimaryKey(
 	table: string,
 	constraintName: string,
 	columns: string[],
+	dialect: SQLDialect,
 ): Operation {
-	const qTable = alterTable(schema, table);
-	const alterSql = `ALTER TABLE ${qTable} ADD CONSTRAINT ${quoteIdent(constraintName)} PRIMARY KEY (${quoteIdentList(columns)})`;
+	requireCapability(dialect, "addPrimaryKeyConstraints", "ADD PRIMARY KEY constraints");
+	const qTable = dialect.qualified(schema, table);
+	const alterSql = `ALTER TABLE ${qTable} ADD CONSTRAINT ${dialect.quoteIdent(constraintName)} PRIMARY KEY (${dialect.quoteIdentList(columns)})`;
 
 	return {
 		id: `pk.${table}.${constraintName}`,
@@ -29,14 +29,14 @@ export function addPrimaryKey(
 		precheck: [
 			check(
 				`ensure primary key "${constraintName}" does not exist on "${table}"`,
-				constraintExistsSql(schema, table, constraintName, true),
+				dialect.constraintExistsSql(schema, table, constraintName, true),
 			),
 		],
 		execute: [step(`add primary key "${constraintName}" on "${table}"`, alterSql)],
 		postcheck: [
 			check(
 				`verify primary key "${constraintName}" exists on "${table}"`,
-				constraintExistsSql(schema, table, constraintName, false),
+				dialect.constraintExistsSql(schema, table, constraintName, false),
 			),
 		],
 	};
