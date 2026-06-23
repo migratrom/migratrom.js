@@ -10,14 +10,14 @@
 		"schema",
 		"sqlite"
 	],
-	"homepage": "https://github.com/mofax/migratrom#readme",
+	"homepage": "https://github.com/migratrom/migratrom.js#readme",
 	"bugs": {
-		"url": "https://github.com/mofax/migratrom/issues"
+		"url": "https://github.com/migratrom/migratrom.js/issues"
 	},
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/mofax/migratrom.git"
+		"url": "git+https://github.com/migratrom/migratrom.js.git"
 	},
 	"files": [
 		"dist",
